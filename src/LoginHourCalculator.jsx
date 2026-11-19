@@ -95,86 +95,55 @@ export default function App() {
     };
   }, [loginDuration, breakDuration, targetShift, manualTarget, concession, currentTime]);
 
-  // Handle uploading and analyzing the screenshot with Gemini
+  // Upload the screenshot to our Vercel serverless function.
+  // The Gemini API key stays on the server and is never sent to the browser.
   const handleFileUpload = async (event) => {
-    const file = event.target.files[0];
+    const file = event.target.files?.[0];
     if (!file) return;
 
     setErrorMsg('');
     setIsProcessing(true);
 
     try {
-      // 1. Convert file to base64
+      if (!file.type.startsWith('image/')) {
+        throw new Error('Please upload an image file (PNG, JPG, or WEBP).');
+      }
+
       const base64Data = await new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = error => reject(error);
+        reader.onload = () => {
+          const result = String(reader.result || '');
+          const commaIndex = result.indexOf(',');
+          if (commaIndex < 0) reject(new Error('Could not read the image file.'));
+          else resolve(result.slice(commaIndex + 1));
+        };
+        reader.onerror = () => reject(new Error('Could not read the image file.'));
         reader.readAsDataURL(file);
       });
 
-      // 2. Call Gemini API for Image Understanding
-      const payload = {
-        contents: [
-          {
-            role: "user",
-            parts: [
-              { 
-                text: `You are an expert OCR data extractor. Look at the provided screenshot of a call center dashboard. 
-                Extract the 'Total Login Duration' and 'Total Break Duration'. 
-                Convert the extracted times strictly into HH:MM:SS format. 
-                For Example: "1h 58m 18s" becomes "01:58:18", and "31m 48s" becomes "00:31:48".
-                Return a JSON object exactly like this, with no markdown formatting or extra text:
-                {
-                  "loginDuration": "HH:MM:SS",
-                  "breakDuration": "HH:MM:SS"
-                }
-                If a value is not found, default to "00:00:00".` 
-              },
-              {
-                inlineData: {
-                  mimeType: file.type,
-                  data: base64Data
-                }
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseMimeType: "application/json" // Enforce structured JSON response
-        }
-      };
-
-      const apiKey = ""; // API key is populated automatically by the platform runtime
-      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
-
-      const response = await fetch(apiUrl, {
+      const response = await fetch('/api/extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify({ imageBase64: base64Data, mimeType: file.type })
       });
 
-      const result = await response.json();
-      
-      if (result.candidates && result.candidates.length > 0) {
-        const jsonText = result.candidates[0].content.parts[0].text;
-        const data = JSON.parse(jsonText);
-        
-        // Update editable fields
-        if (data.loginDuration) setLoginDuration(data.loginDuration);
-        if (data.breakDuration) setBreakDuration(data.breakDuration);
-        
-        // Update current time to exact current moment on fresh extraction
-        setCurrentTime(getCurrentTimeStr());
-      } else {
-        throw new Error("Could not extract data from the image.");
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(result.error || `OCR request failed (HTTP ${response.status}).`);
       }
 
+      if (!result.loginDuration || !result.breakDuration) {
+        throw new Error('Gemini could not identify both duration values. Please try a clearer screenshot.');
+      }
+
+      setLoginDuration(result.loginDuration);
+      setBreakDuration(result.breakDuration);
+      setCurrentTime(getCurrentTimeStr());
     } catch (err) {
-      console.error(err);
-      setErrorMsg('Failed to process image. Please check the file or enter data manually.');
+      console.error('Screenshot extraction failed:', err);
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to process image. Please try again.');
     } finally {
       setIsProcessing(false);
-      // Reset input so the same file can be selected again if needed
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
