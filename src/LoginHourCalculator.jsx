@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 // --- Utility Functions for Time Math ---
 
@@ -406,6 +407,7 @@ export default function App() {
         </div>
 
       </div>
+      <SpeedInsights />
     </div>
   );
 }
