@@ -1,0 +1,6 @@
+{
+  "name": "Login Hour Calculator",
+  "description": "Upload your dashboard screenshot to auto-calculate your net login, deficit, and completion time.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
