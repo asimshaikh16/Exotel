@@ -57,16 +57,16 @@ Return only JSON:
 Do not guess. If unreadable, return empty strings.
 `;
 
-  const models = [
-    'gemini-3.8-flash',
-    'gemini-3.5-flash-lite'
-  ];
+ const models = [
+  'gemini-3.5-flash-lite',
+  'gemini-3.8-flash'
+];
 
   let lastError = '';
 
   for (const model of models) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     try {
       const response = await fetch(
